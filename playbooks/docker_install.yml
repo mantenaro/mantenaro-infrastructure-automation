@@ -1,0 +1,63 @@
+---
+- hosts: supabase
+  name: Install Docker
+  become: true
+  vars:
+    docker_repository_name: "docker_com_linux_ubuntu_repository"
+  tasks:
+    - name: Remove conflicting packages if present
+      ansible.builtin.apt:
+        name:
+          - docker.io
+          - docker-compose
+          - docker-compose-v2
+          - docker-doc
+          - podman-docker
+          - containerd
+          - runc
+        state: absent
+
+    - name: Remove old Docker repository from apt sources if present
+      ansible.builtin.apt_repository:
+        repo: "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu {{ ansible_facts['distribution_release'] }} stable"
+        state: absent
+        install_python_apt: true
+        filename: docker_com_linux_ubuntu_repository
+        update_cache: true
+
+    - name: Install prerequisites packages
+      ansible.builtin.apt:
+        name:
+          - python3-apt
+          - ca-certificates
+          - curl
+
+    - name: Add Docker's official signing key
+      block:
+        - name: Download Docker gpg sining key
+          ansible.builtin.get_url:
+            url: https://download.docker.com/linux/ubuntu/gpg
+            dest: /etc/apt/keyrings/docker.asc
+
+        - name: Add the Docker repository to apt sources
+          ansible.builtin.apt_repository:
+            repo: "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu {{ ansible_facts['distribution_release'] }} stable"
+            state: present
+            install_python_apt: true
+            filename: docker_com_linux_ubuntu_repository
+            update_cache: true
+
+    - name: Install Docker
+      ansible.builtin.apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+
+    - name: Ensure Docker service is enabled and started
+      ansible.builtin.service:
+        name: docker
+        state: started
+        enabled: true
