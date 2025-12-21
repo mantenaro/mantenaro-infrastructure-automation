@@ -1,0 +1,89 @@
+---
+- hosts: supabase
+  name: Uninstall Docker
+  vars:
+    docker_repository_name: "docker_com_linux_ubuntu_repository"
+    file_path_docker_rootless_installation_script: "/usr/bin/dockerd-rootless-setuptool.sh"
+  become: true
+  tasks:
+    - name: Ensure Docker service is disabled and stopped
+      ansible.builtin.service:
+        name: docker
+        state: stopped
+        enabled: false
+
+    - name: Execute Docker rootless script to uninstallation rootless mode
+      become: false
+      block:
+        - name: Check Docker rootless script exists
+          ansible.builtin.stat:
+            path: "{{ file_path_docker_rootless_installation_script }}"
+          register: docker_rootless_installation_script
+
+        - name: Uninstall Docker rootless script (as non-root user)
+          ansible.builtin.shell: "{{ file_path_docker_rootless_installation_script | ansible.builtin.quote }} uninstall"
+          when: docker_rootless_installation_script.stat.exists
+
+        - name: Remove environment variable PATH
+          ansible.builtin.lineinfile:
+            path: ~/.bashrc
+            line: "export PATH=/usr/bin:$PATH"
+            create: yes
+            state: absent
+          register: environment_variable_path
+
+        - name: Remove environment variable DOCKER_HOST
+          ansible.builtin.lineinfile:
+            path: ~/.bashrc
+            line: "export DOCKER_HOST=unix:///run/user/1000/docker.sock"
+            create: yes
+            state: absent
+          register: environment_variable_docker_host
+
+    - name: Remove dependencies that are no longer required
+      ansible.builtin.apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+          - docker-ce-rootless-extras
+        state: absent
+        autoremove: yes
+        purge: true
+
+    - name: Remove all images, containers, volumes, or custom configuration files
+      block:
+        - name: Remove docker folder
+          ansible.builtin.file:
+            path: /var/lib/docker
+            state: absent
+
+        - name: Remove containerd folder
+          ansible.builtin.file:
+            path: /var/lib/containerd
+            state: absent
+
+    - name: Remove old docker repository from apt sources
+      ansible.builtin.apt_repository:
+        repo: "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu {{ ansible_facts['distribution_release'] }} stable"
+        state: absent
+        install_python_apt: true
+        filename: docker_com_linux_ubuntu_repository
+        update_cache: true
+
+    - name: Remove docker keyrings file
+      ansible.builtin.file:
+        path: /etc/apt/keyrings/docker.asc
+        state: absent
+
+    - name: Reboot system to update environment variables
+      ansible.builtin.reboot:
+        msg: "Reboot initiated by Ansible to recognize environment variable changes."
+        connect_timeout: 5
+        reboot_timeout: 300
+        pre_reboot_delay: 0
+        post_reboot_delay: 30
+        test_command: uptime
+      when: environment_variable_path.changed or environment_variable_docker_host.changed
