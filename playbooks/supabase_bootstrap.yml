@@ -1,0 +1,41 @@
+---
+- hosts: supabase
+  tasks:
+    - name: Clone supabase repository
+      ansible.builtin.git:
+        repo: https://github.com/supabase/supabase
+        dest: /tmp/checkout
+        depth: 1
+        single_branch: yes
+        version: master
+
+    - name: Copy supabase compose file
+      ansible.builtin.copy:
+        src: /tmp/checkout/docker/docker-compose.yml
+        remote_src: true
+        dest: supabase-database/
+        directory_mode: 0700
+        owner: "{{ ansible_facts['user_id'] }}"
+        group: "{{ ansible_facts['user_id'] }}"
+
+    - name: Copy supabase S3 compose file
+      ansible.builtin.copy:
+        src: /tmp/checkout/docker/docker-compose.s3.yml
+        remote_src: true
+        dest: supabase-database/
+        directory_mode: 0700
+        owner: "{{ ansible_facts['user_id'] }}"
+        group: "{{ ansible_facts['user_id'] }}"
+
+    - name: Copy supabase env file (demo not for production)
+      ansible.builtin.copy:
+        src: /tmp/checkout/docker/.env.example
+        remote_src: true
+        dest: supabase-database/
+        directory_mode: 0700
+        owner: "{{ ansible_facts['user_id'] }}"
+        group: "{{ ansible_facts['user_id'] }}"
+
+    - name: Execute supabase compose (pull and run)
+      community.docker.docker_compose_v2:
+        project_src: supabase-database/
