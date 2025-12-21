@@ -1,0 +1,13 @@
+---
+supabase:
+  hosts:
+    supabase01:
+      ansible_host: 91.98.163.33
+      ansible_port: 2020
+      ansible_connection: ssh
+      ansible_user: admin_cbo
+      ansible_become_method: sudo
+
+database:
+  children:
+    supabase:
