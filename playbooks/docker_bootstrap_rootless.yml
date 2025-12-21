@@ -1,0 +1,100 @@
+---
+- hosts: supabase
+  name: Bootstrap Docker as a non-root user (rootless mode)
+  vars:
+    min_subordinate: 65536
+    file_path_subuid: "/etc/subuid"
+    file_path_subgid: "/etc/subgid"
+    file_path_docker_rootless_installation_script: "/usr/bin/dockerd-rootless-setuptool.sh"
+    regex_pattern: "{{ ansible_facts['user_id'] }}:.*:(\\d+)"
+  tasks:
+    - name: Install prerequisite packages
+      ansible.builtin.apt:
+        name: uidmap
+
+    - name: Check if subuid contain the minimum required subordinate
+      block:
+        - name: subuid - Read content from a subuid file
+          slurp:
+            src: "{{ file_path_subuid }}"
+          register: subuid_file
+
+        - name: subuid - Decode base64 content and set the string as variable
+          set_fact:
+            subuid_content: "{{ subuid_file['content'] | b64decode }}"
+
+        - name: subuid - Extract users subordinate (substring) using regex
+          set_fact:
+            user_subuid: "{{ subuid_content | regex_search(regex_pattern) | split(':') }}"
+
+        - name: subuid - Check if the subordinate meets the minimum size
+          assert:
+            that:
+              - "user_subuid[-1] | int >= min_subordinate"
+            fail_msg: "The subuid count is not sufficient"
+
+    - name: Check if subgid contain the minimum required subordinate
+      block:
+        - name: subgid - Read content from a subgid file
+          slurp:
+            src: "{{ file_path_subgid }}"
+
+          register: subgid_file
+        - name: subgid - Decode base64 content and set the string as variable
+          set_fact:
+            subgid_content: "{{ subgid_file['content'] | b64decode }}"
+
+        - name: subgid - Extract users subordinate (substring) using regex
+          set_fact:
+            user_subgid: "{{ subgid_content | regex_search(regex_pattern) | split(':') }}"
+
+        - name: subgid - Check if the subordinate meets the minimum size
+          assert:
+            that:
+              - "user_subgid[-1] | int >= min_subordinate"
+            fail_msg: "The subgid count is not sufficient"
+
+    - name: Shutdown running rootful Docker
+      block:
+        - name: Ensure Docker service is disabled and stopped
+          become: true
+          ansible.builtin.service:
+            name: docker
+            state: stopped
+            enabled: false
+
+        - name: Delete the rootful Docker socket file
+          become: true
+          ansible.builtin.file:
+            path: /var/run/docker.sock
+            state: absent
+
+    - name: Execute Docker rootless script to installation
+      block:
+        - name: Check Docker rootless script exists
+          ansible.builtin.stat:
+            path: "{{ file_path_docker_rootless_installation_script }}"
+          register: docker_rootless_installation_script
+
+        - name: Install Docker rootless setup tool
+          become: true
+          ansible.builtin.apt:
+            name: docker-ce-rootless-extras
+          when: not docker_rootless_installation_script.stat.exists
+
+        - name: Install Docker rootless script (as non-root user)
+          ansible.builtin.shell: "{{ file_path_docker_rootless_installation_script | ansible.builtin.quote }} install"
+
+    - name: Ensure Docker service is enabled and started
+      become: true
+      ansible.builtin.service:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Add environment variable PATH
+      ansible.builtin.lineinfile:
+        path: ~/.bashrc
+        line: "export PATH=/usr/bin:$PATH"
+        create: yes
+        state: present
