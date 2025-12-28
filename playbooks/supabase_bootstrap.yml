@@ -27,5 +27,30 @@
       command: mv supabase-database/.env.example supabase-database/.env
       when: env_example.stat.exists
 
+    - name: Get current docker context
+      community.docker.docker_context_info:
+        only_current: true
+      register: docker_current_context
+
+    - name: Update environment variable DOCKER_SOCKET_LOCATION if docker is running in rootless mode
+      ansible.builtin.lineinfile:
+        path: supabase-database/.env
+        regexp: "^DOCKER_SOCKET_LOCATION="
+        line: "DOCKER_SOCKET_LOCATION=/run/user/1000/docker.sock"
+        create: yes
+        state: present
+      when: "docker_current_context.current_context_name == 'rootless'"
+
+    - name: Tear down existing (old) supabase services
       community.docker.docker_compose_v2:
+        cli_context: "{{ docker_current_context.current_context_name }}"
         project_src: supabase-database/
+        state: absent
+      become: false
+
+    - name: Create and start supabase services
+      community.docker.docker_compose_v2:
+        cli_context: "{{ docker_current_context.current_context_name }}"
+        project_src: supabase-database/
+      become: false
+      register: output
