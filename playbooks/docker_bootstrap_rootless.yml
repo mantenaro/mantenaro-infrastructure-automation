@@ -98,3 +98,10 @@
         line: "export PATH=/usr/bin:$PATH"
         create: yes
         state: present
+
+    - name: Add environment variable DOCKER_HOST
+      ansible.builtin.lineinfile:
+        path: ~/.bashrc
+        line: "export DOCKER_HOST=unix:///run/user/1000/docker.sock"
+        create: yes
+        state: present

@@ -27,16 +27,14 @@
         - name: Remove environment variable PATH
           ansible.builtin.lineinfile:
             path: ~/.bashrc
-            line: "export PATH=/usr/bin:$PATH"
-            create: yes
+            regexp: "^export PATH="
             state: absent
           register: environment_variable_path
 
         - name: Remove environment variable DOCKER_HOST
           ansible.builtin.lineinfile:
             path: ~/.bashrc
-            line: "export DOCKER_HOST=unix:///run/user/1000/docker.sock"
-            create: yes
+            regexp: "^export DOCKER_HOST="
             state: absent
           register: environment_variable_docker_host
 
