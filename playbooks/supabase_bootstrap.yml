@@ -11,31 +11,21 @@
 
     - name: Copy supabase compose file
       ansible.builtin.copy:
-        src: /tmp/checkout/docker/docker-compose.yml
+        src: /tmp/checkout/docker/
         remote_src: true
         dest: supabase-database/
         directory_mode: 0700
         owner: "{{ ansible_facts['user_id'] }}"
         group: "{{ ansible_facts['user_id'] }}"
 
-    - name: Copy supabase S3 compose file
-      ansible.builtin.copy:
-        src: /tmp/checkout/docker/docker-compose.s3.yml
-        remote_src: true
-        dest: supabase-database/
-        directory_mode: 0700
-        owner: "{{ ansible_facts['user_id'] }}"
-        group: "{{ ansible_facts['user_id'] }}"
+    - name: Register "env.example" path
+      ansible.builtin.stat:
+        path: supabase-database/.env.example
+      register: env_example
 
-    - name: Copy supabase env file (demo not for production)
-      ansible.builtin.copy:
-        src: /tmp/checkout/docker/.env.example
-        remote_src: true
-        dest: supabase-database/
-        directory_mode: 0700
-        owner: "{{ ansible_facts['user_id'] }}"
-        group: "{{ ansible_facts['user_id'] }}"
+    - name: Move supabase env file
+      command: mv supabase-database/.env.example supabase-database/.env
+      when: env_example.stat.exists
 
-    - name: Execute supabase compose (pull and run)
       community.docker.docker_compose_v2:
         project_src: supabase-database/
