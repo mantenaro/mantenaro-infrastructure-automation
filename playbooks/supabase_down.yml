@@ -1,0 +1,14 @@
+---
+- hosts: supabase
+  tasks:
+    - name: Get current docker context
+      community.docker.docker_context_info:
+        only_current: true
+      register: docker_current_context
+
+    - name: Tear down existing supabase services
+      community.docker.docker_compose_v2:
+        cli_context: "{{ docker_current_context.current_context_name }}"
+        project_src: supabase-database/
+        state: absent
+      become: false
